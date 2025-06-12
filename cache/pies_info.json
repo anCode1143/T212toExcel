@@ -1,0 +1,273 @@
+[
+  {
+    "id": 3234819,
+    "cash": 2.28,
+    "dividendDetails": {
+      "gained": 2.1,
+      "reinvested": 0.0,
+      "inCash": 2.1
+    },
+    "result": {
+      "priceAvgInvestedValue": 2003.63,
+      "priceAvgValue": 1800.92,
+      "priceAvgResult": -202.71,
+      "priceAvgResultCoef": -0.1012
+    },
+    "progress": null,
+    "status": null,
+    "detailed": {
+      "instruments": [
+        {
+          "ticker": "AIGAPp_EQ",
+          "result": {
+            "priceAvgInvestedValue": 244.72,
+            "priceAvgValue": 213.65,
+            "priceAvgResult": -31.07,
+            "priceAvgResultCoef": -0.127
+          },
+          "expectedShare": 0.13,
+          "currentShare": 0.1186,
+          "ownedQuantity": 41.04253,
+          "issues": []
+        },
+        {
+          "ticker": "FLXIm_EQ",
+          "result": {
+            "priceAvgInvestedValue": 254.55,
+            "priceAvgValue": 238.12,
+            "priceAvgResult": -16.43,
+            "priceAvgResultCoef": -0.0645
+          },
+          "expectedShare": 0.12,
+          "currentShare": 0.1322,
+          "ownedQuantity": 6.071932,
+          "issues": []
+        },
+        {
+          "ticker": "WENTm_EQ",
+          "result": {
+            "priceAvgInvestedValue": 157.03,
+            "priceAvgValue": 146.51,
+            "priceAvgResult": -10.52,
+            "priceAvgResultCoef": -0.067
+          },
+          "expectedShare": 0.084,
+          "currentShare": 0.0814,
+          "ownedQuantity": 8.503356,
+          "issues": []
+        },
+        {
+          "ticker": "BEP_US_EQ",
+          "result": {
+            "priceAvgInvestedValue": 160.11,
+            "priceAvgValue": 163.92,
+            "priceAvgResult": 3.81,
+            "priceAvgResultCoef": 0.0238
+          },
+          "expectedShare": 0.08,
+          "currentShare": 0.091,
+          "ownedQuantity": 7.234304,
+          "issues": []
+        },
+        {
+          "ticker": "E0Pd_EQ",
+          "result": {
+            "priceAvgInvestedValue": 175.08,
+            "priceAvgValue": 101.12,
+            "priceAvgResult": -73.96,
+            "priceAvgResultCoef": -0.4224
+          },
+          "expectedShare": 0.08,
+          "currentShare": 0.0561,
+          "ownedQuantity": 2.578351,
+          "issues": []
+        },
+        {
+          "ticker": "WTCHa_EQ",
+          "result": {
+            "priceAvgInvestedValue": 144.14,
+            "priceAvgValue": 131.33,
+            "priceAvgResult": -12.81,
+            "priceAvgResultCoef": -0.0889
+          },
+          "expectedShare": 0.072,
+          "currentShare": 0.0729,
+          "ownedQuantity": 0.8258421,
+          "issues": []
+        },
+        {
+          "ticker": "OD7Zd_EQ",
+          "result": {
+            "priceAvgInvestedValue": 135.46,
+            "priceAvgValue": 123.4,
+            "priceAvgResult": -12.06,
+            "priceAvgResultCoef": -0.089
+          },
+          "expectedShare": 0.068,
+          "currentShare": 0.0685,
+          "ownedQuantity": 9.305619,
+          "issues": []
+        },
+        {
+          "ticker": "COPAPp_EQ",
+          "result": {
+            "priceAvgInvestedValue": 130.25,
+            "priceAvgValue": 129.39,
+            "priceAvgResult": -0.86,
+            "priceAvgResultCoef": -0.0066
+          },
+          "expectedShare": 0.066,
+          "currentShare": 0.0718,
+          "ownedQuantity": 3.487478,
+          "issues": []
+        },
+        {
+          "ticker": "ZPDHd_EQ",
+          "result": {
+            "priceAvgInvestedValue": 119.52,
+            "priceAvgValue": 103.17,
+            "priceAvgResult": -16.35,
+            "priceAvgResultCoef": -0.1368
+          },
+          "expectedShare": 0.06,
+          "currentShare": 0.0573,
+          "ownedQuantity": 2.885266,
+          "issues": []
+        },
+        {
+          "ticker": "PAVEm_EQ",
+          "result": {
+            "priceAvgInvestedValue": 98.2,
+            "priceAvgValue": 90.9,
+            "priceAvgResult": -7.3,
+            "priceAvgResultCoef": -0.0743
+          },
+          "expectedShare": 0.049,
+          "currentShare": 0.0505,
+          "ownedQuantity": 2.676988,
+          "issues": []
+        },
+        {
+          "ticker": "XLKSm_EQ",
+          "result": {
+            "priceAvgInvestedValue": 96.16,
+            "priceAvgValue": 88.08,
+            "priceAvgResult": -8.08,
+            "priceAvgResultCoef": -0.084
+          },
+          "expectedShare": 0.048,
+          "currentShare": 0.0489,
+          "ownedQuantity": 0.1433278,
+          "issues": []
+        },
+        {
+          "ticker": "XLFSl_EQ",
+          "result": {
+            "priceAvgInvestedValue": 59.9,
+            "priceAvgValue": 55.92,
+            "priceAvgResult": -3.98,
+            "priceAvgResultCoef": -0.0664
+          },
+          "expectedShare": 0.03,
+          "currentShare": 0.0311,
+          "ownedQuantity": 0.164418,
+          "issues": []
+        },
+        {
+          "ticker": "XMIDl_EQ",
+          "result": {
+            "priceAvgInvestedValue": 63.4,
+            "priceAvgValue": 57.35,
+            "priceAvgResult": -6.05,
+            "priceAvgResultCoef": -0.0954
+          },
+          "expectedShare": 0.03,
+          "currentShare": 0.0318,
+          "ownedQuantity": 4.70902919,
+          "issues": []
+        },
+        {
+          "ticker": "EGLNl_EQ",
+          "result": {
+            "priceAvgInvestedValue": 58.57,
+            "priceAvgValue": 67.53,
+            "priceAvgResult": 8.96,
+            "priceAvgResultCoef": 0.153
+          },
+          "expectedShare": 0.03,
+          "currentShare": 0.0375,
+          "ownedQuantity": 1.18878,
+          "issues": []
+        },
+        {
+          "ticker": "EWATm_EQ",
+          "result": {
+            "priceAvgInvestedValue": 48.27,
+            "priceAvgValue": 45.94,
+            "priceAvgResult": -2.33,
+            "priceAvgResultCoef": -0.0483
+          },
+          "expectedShare": 0.024,
+          "currentShare": 0.0255,
+          "ownedQuantity": 22.53508,
+          "issues": []
+        },
+        {
+          "ticker": "EXP_US_EQ",
+          "result": {
+            "priceAvgInvestedValue": 42.25,
+            "priceAvgValue": 31.13,
+            "priceAvgResult": -11.12,
+            "priceAvgResultCoef": -0.2632
+          },
+          "expectedShare": 0.021,
+          "currentShare": 0.0173,
+          "ownedQuantity": 0.1812019,
+          "issues": []
+        },
+        {
+          "ticker": "SUGAm_EQ",
+          "result": {
+            "priceAvgInvestedValue": 16.02,
+            "priceAvgValue": 13.45,
+            "priceAvgResult": -2.57,
+            "priceAvgResultCoef": -0.1604
+          },
+          "expectedShare": 0.008,
+          "currentShare": 0.0075,
+          "ownedQuantity": 1.38801,
+          "issues": []
+        }
+      ],
+      "settings": {
+        "id": 3234819,
+        "instrumentShares": null,
+        "name": "Macro Meta Pie",
+        "icon": "Coins",
+        "goal": null,
+        "creationDate": 1734386400.0,
+        "endDate": null,
+        "initialInvestment": null,
+        "dividendCashAction": "REINVEST",
+        "publicUrl": null
+      }
+    }
+  },
+  {
+    "id": 3403446,
+    "cash": 2.34,
+    "dividendDetails": {
+      "gained": 8.58,
+      "reinvested": 6.24,
+      "inCash": 2.34
+    },
+    "result": {
+      "priceAvgInvestedValue": 502.96,
+      "priceAvgValue": 571.1,
+      "priceAvgResult": 68.14,
+      "priceAvgResultCoef": 0.1355
+    },
+    "progress": null,
+    "status": null
+  }
+]
