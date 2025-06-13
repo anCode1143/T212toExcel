@@ -7,7 +7,7 @@ from AccountData import (
     export_account_history,
 )
 
-CACHE_DIR = "cache"
+CACHE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "cache")
 os.makedirs(CACHE_DIR, exist_ok=True)
 
 def save_json(data, filename):

@@ -113,9 +113,13 @@ def export_account_history():
                     # Download the CSV
                     csv_response = requests.get(download_link)
                     if csv_response.status_code == 200:
-                        with open("trading212_history.csv", "wb") as f:
+                        # Use absolute path to save in cache directory
+                        cache_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "cache")
+                        os.makedirs(cache_dir, exist_ok=True)
+                        csv_path = os.path.join(cache_dir, "trading212_history.csv")
+                        with open(csv_path, "wb") as f:
                             f.write(csv_response.content)
-                        print("✅ CSV downloaded as trading212_history.csv")
+                        print(f"✅ CSV downloaded to {csv_path}")
                         return True
     
     print("❌ Export timed out")
