@@ -1,5 +1,6 @@
 import os
 import csv
+import yfinance as yf
 from datetime import datetime
 from openpyxl.styles import Font, PatternFill, Border, Side
 import matplotlib.pyplot as plt
@@ -21,9 +22,91 @@ class AdvancedAccountInfo:
         transactions_info = []
         csv_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "cache", "trading212_history.csv")
         
+        # Create ticker to ISIN and currency mapping from trading history CSV
+        ticker_to_isin = {}
+        ticker_to_currency = {}
+        
+        def is_uk_security_in_pence(isin, ticker, trading_currency=None):
+            """Check if a security is quoted in pence, requiring conversion."""
+            # First check if we have trading currency info from T212 history
+            if trading_currency == "GBX":
+                return True
+            
+            # Then check if it's a UK security
+            if not isin or not isin.startswith("GB"):
+                return False
+            
+            try:
+                import yfinance as yf
+                # Convert T212 ticker to Yahoo Finance ticker format
+                # Remove the suffix and add .L for London Stock Exchange
+                base_ticker = ticker.split("_")[0]
+                
+                # Common T212 to Yahoo Finance ticker mappings for UK securities
+                ticker_mappings = {
+                    "PSN": "PSN.L",     # Persimmon
+                    "SVS": "SVS.L",     # Savills  
+                    "TW": "TW.L",       # Taylor Wimpey
+                    "BLND": "BLND.L",   # British Land
+                    "COPAP": "COPA.L",  # WisdomTree Copper (might be different)
+                    "OD7Z": "ODGD.L",   # WisdomTree Industrial Metals (might be different)
+                    "SUGA": "SUGA.L",   # WisdomTree Sugar (might be different)
+                    "AIGAP": "AIGA.L",  # WisdomTree Agriculture (might be different)
+                }
+                
+                # Use mapping if available, otherwise try adding .L
+                if base_ticker in ticker_mappings:
+                    yahoo_ticker = ticker_mappings[base_ticker]
+                else:
+                    # Remove trailing 'l' or 'L' if present and add .L
+                    if base_ticker.endswith(('l', 'L')):
+                        base_ticker = base_ticker[:-1]
+                    yahoo_ticker = f"{base_ticker}.L"
+                
+                # Suppress yfinance and HTTP library output and errors
+                import warnings, logging, requests
+                warnings.filterwarnings("ignore", message="Unverified HTTPS request")
+                requests.packages.urllib3.disable_warnings()
+                logging.getLogger("yfinance").setLevel(logging.CRITICAL)
+                logging.getLogger("urllib3").setLevel(logging.CRITICAL)
+                logging.getLogger("requests").setLevel(logging.CRITICAL)
+                stock = yf.Ticker(yahoo_ticker)
+                info = stock.info
+                currency = info.get("currency", "")
+                
+                # If currency is GBp (pence), we need to convert to pounds
+                return currency == "GBp"
+            except Exception as e:
+                print(f"Warning: Could not determine currency for {ticker} ({yahoo_ticker if 'yahoo_ticker' in locals() else 'unknown'}): {e}")
+                # For UK securities, assume pence if we can't determine otherwise
+                # This is a reasonable default for most UK stocks
+                return True  # Conservative approach - convert if unsure
+        
+        def convert_price_if_needed(price, isin, ticker, trading_currency=None):
+            """Convert price from pence to pounds if needed for UK securities."""
+            if is_uk_security_in_pence(isin, ticker, trading_currency):
+                return price / 100.0
+            return price
+        
         if os.path.exists(csv_path):
             with open(csv_path, 'r', encoding='utf-8') as csvfile:
                 reader = csv.DictReader(csvfile)
+                
+                # First pass: build ticker mappings
+                for row in reader:
+                    ticker = row.get("Ticker", "")
+                    isin = row.get("ISIN", "")
+                    currency = row.get("Currency (Price / share)", "")
+                    if ticker and isin:
+                        ticker_to_isin[ticker] = isin
+                        if currency:
+                            ticker_to_currency[ticker] = currency
+                
+                # Reset file pointer for second pass
+                csvfile.seek(0)
+                reader = csv.DictReader(csvfile)
+                
+                # Second pass: process transactions with price conversion
                 for row in reader:
                     action = row.get("Action", "")
                     if action.lower() in ["market buy", "market sell", "stop buy", "stop sell", "limit buy", "limit sell"]:
@@ -35,14 +118,27 @@ class AdvancedAccountInfo:
                             continue
                             
                         order_type = "Buy" if "buy" in action.lower() else "Sell"
+                        ticker = row.get("Ticker", "")
+                        
+                        # Handle T212 ticker format - remove trailing 'l' if present
+                        clean_ticker = ticker
+                        if ticker.endswith('l') and len(ticker) > 1:
+                            clean_ticker = ticker[:-1]
+                        
+                        # Get ISIN and currency for this ticker
+                        isin = ticker_to_isin.get(clean_ticker, "")
+                        trading_currency = ticker_to_currency.get(clean_ticker, "")
+                        
+                        # Convert price from pence to pounds if needed
+                        converted_price = convert_price_if_needed(price, isin, clean_ticker, trading_currency)
                         
                         transactions_info.append({
                             "dateTime": row.get("Time", ""),
-                            "ticker": row.get("Ticker", ""),
+                            "ticker": clean_ticker,  # Use clean ticker for display
                             "name": row.get("Name", ""),
                             "orderType": order_type,
                             "quantity": qty,
-                            "pricePerUnit": price,
+                            "pricePerUnit": converted_price,
                             "totalValue": total,
                             "currency": row.get("Currency (Total)", ""),
                             "result": row.get("Result", "0")
@@ -354,7 +450,11 @@ class AdvancedAccountInfo:
             for col_offset, val in enumerate(values):
                 cell = self.ws.cell(row=row, column=start_col + col_offset, value=val)
                 cell.border = self.styles["table_border"]
-                cell.fill = self.styles["red"]
+                # Make fee type column grey, amount and currency columns red
+                if col_offset == 0:  # Fee Type column
+                    cell.fill = self.styles["grey"]
+                else:  # Amount and Currency columns
+                    cell.fill = self.styles["red"]
             row += 1
         
         # Add total row if fees exist
@@ -362,8 +462,12 @@ class AdvancedAccountInfo:
             for col_offset, val in enumerate(["TOTAL FEES", round(total_fees, 2), "EUR"]):
                 cell = self.ws.cell(row=row, column=start_col + col_offset, value=val)
                 cell.border = self.styles["table_border"]
-                cell.fill = self.styles["red"]
                 cell.font = Font(bold=True)
+                # Make total fee label grey, amount and currency columns red
+                if col_offset == 0:  # Fee Type column
+                    cell.fill = self.styles["grey"]
+                else:  # Amount and Currency columns
+                    cell.fill = self.styles["red"]
         
         # Set column widths
         for col_letter, width in {'J': 18, 'K': 12, 'L': 12}.items():
@@ -385,69 +489,56 @@ class AdvancedAccountInfo:
                     bottom=thin_side if r == last_data_row else border.bottom
                 )
                 cell.border = new_border
+        
+        # Store the last row number for use by trading_statistics_analysis
+        self.last_fee_row = last_data_row
                 
-    def capital_gains_and_dividends_analysis(self):
+    def capital_gains_graph(self):
         csv_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "cache", "trading212_history.csv")
         
         capital_gains_data = defaultdict(float)
-        dividend_data = defaultdict(float)
         
-        if not os.path.exists(csv_path):
-            self._create_gains_graphs(capital_gains_data, dividend_data)
-            return
-        
-        try:
-            with open(csv_path, 'r', encoding='utf-8') as csvfile:
-                reader = csv.DictReader(csvfile)
-                
-                for row in reader:
-                    action = row.get("Action", "").strip()
-                    time_str = row.get("Time", "").strip()
-                    result_str = row.get("Result", "0").strip()
+        if os.path.exists(csv_path):
+            try:
+                with open(csv_path, 'r', encoding='utf-8') as csvfile:
+                    reader = csv.DictReader(csvfile)
                     
-                    if not time_str:
-                        continue
+                    for row in reader:
+                        action = row.get("Action", "").strip()
+                        time_str = row.get("Time", "").strip()
+                        result_str = row.get("Result", "0").strip()
                         
-                    try:
-                        date_part = time_str.split(" ")[0]
-                        if not date_part:
+                        if not time_str:
                             continue
                             
-                        date = datetime.strptime(date_part, "%Y-%m-%d")
-                        
-                        if action.lower() in ["market buy", "market sell", "stop buy", "stop sell", "limit buy", "limit sell"]:
-                            if result_str and result_str not in ["0", ""]:
-                                try:
-                                    result = float(result_str)
-                                    if abs(result) > 0.01:
-                                        capital_gains_data[date] += result
-                                except (ValueError, TypeError):
-                                    continue
-                        
-                        elif "dividend" in action.lower():
-                            total_str = row.get("Total", "0").strip()
-                            try:
-                                dividend_amount = float(total_str)
-                                if dividend_amount > 0:
-                                    dividend_data[date] += dividend_amount
-                            except (ValueError, TypeError):
+                        try:
+                            date_part = time_str.split(" ")[0]
+                            if not date_part:
                                 continue
                                 
-                    except (ValueError, IndexError):
-                        continue
-                        
-        except Exception:
-            pass
+                            date = datetime.strptime(date_part, "%Y-%m-%d")
+                            
+                            if action.lower() in ["market buy", "market sell", "stop buy", "stop sell", "limit buy", "limit sell"]:
+                                if result_str and result_str not in ["0", ""]:
+                                    try:
+                                        result = float(result_str)
+                                        if abs(result) > 0.01:
+                                            capital_gains_data[date] += result
+                                    except (ValueError, TypeError):
+                                        continue
+                                        
+                        except (ValueError, IndexError):
+                            continue
+                            
+            except Exception:
+                pass
         
-        self._create_gains_graphs(capital_gains_data, dividend_data)
-    
-    def _create_gains_graphs(self, capital_gains_data, dividend_data):
+        # Create capital gains graph
         plt.style.use('default')
-        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 10))
+        fig, ax = plt.subplots(1, 1, figsize=(12, 6))
         fig.patch.set_facecolor('white')
         
         primary_color = '#4472C4'
-        secondary_color = '#70AD47'
         accent_color = '#FFC000'
         
         if capital_gains_data:
@@ -459,23 +550,23 @@ class AdvancedAccountInfo:
                 running_total += capital_gains_data[date]
                 cumulative_gains.append(running_total)
             
-            ax1.plot(dates, cumulative_gains, color=primary_color, linewidth=3, 
+            ax.plot(dates, cumulative_gains, color=primary_color, linewidth=3, 
                     marker='o', markersize=5, zorder=3)
-            ax1.fill_between(dates, cumulative_gains, alpha=0.3, color=primary_color, zorder=2)
-            ax1.axhline(y=0, color='gray', linestyle='--', alpha=0.5, zorder=1)
+            ax.fill_between(dates, cumulative_gains, alpha=0.3, color=primary_color, zorder=2)
+            ax.axhline(y=0, color='gray', linestyle='--', alpha=0.5, zorder=1)
             
-            ax1.set_title('Capital Gains Progress Over Time', fontsize=16, fontweight='bold', 
+            ax.set_title('Capital Gains Progress Over Time', fontsize=16, fontweight='bold', 
                          pad=20, color='#2F4F4F')
-            ax1.set_ylabel('Capital Gains (€)', fontsize=13, fontweight='bold')
-            ax1.grid(True, alpha=0.3, linestyle='-', linewidth=0.5)
-            ax1.xaxis.set_major_formatter(mdates.DateFormatter('%b %Y'))
-            ax1.xaxis.set_major_locator(mdates.MonthLocator(interval=1))
+            ax.set_ylabel('Capital Gains (€)', fontsize=13, fontweight='bold')
+            ax.grid(True, alpha=0.3, linestyle='-', linewidth=0.5)
+            ax.xaxis.set_major_formatter(mdates.DateFormatter('%b %Y'))
+            ax.xaxis.set_major_locator(mdates.MonthLocator(interval=1))
             
             if cumulative_gains:
                 final_value = cumulative_gains[-1]
                 max_value = max(cumulative_gains)
                 
-                ax1.annotate(f'Current: €{final_value:.2f}', 
+                ax.annotate(f'Current: €{final_value:.2f}', 
                            xy=(dates[-1], final_value), xytext=(20, 20), 
                            textcoords='offset points',
                            bbox=dict(boxstyle='round,pad=0.5', facecolor=primary_color, alpha=0.8),
@@ -484,11 +575,79 @@ class AdvancedAccountInfo:
                 
                 if max_value != final_value:
                     max_idx = cumulative_gains.index(max_value)
-                    ax1.annotate(f'Peak: €{max_value:.2f}', 
+                    ax.annotate(f'Peak: €{max_value:.2f}', 
                                xy=(dates[max_idx], max_value), xytext=(10, -30), 
                                textcoords='offset points',
                                bbox=dict(boxstyle='round,pad=0.3', facecolor=accent_color, alpha=0.7),
                                fontsize=9, color='black', fontweight='bold')
+        
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.spines['left'].set_color('gray')
+        ax.spines['bottom'].set_color('gray')
+        plt.setp(ax.xaxis.get_majorticklabels(), rotation=45, ha='right')
+        ax.tick_params(colors='gray', which='both')
+        ax.set_facecolor('#FAFAFA')
+        
+        plt.tight_layout()
+        
+        img_buffer = io.BytesIO()
+        plt.savefig(img_buffer, format='png', dpi=300, bbox_inches='tight', 
+                   facecolor='white', edgecolor='none', pad_inches=0.2)
+        img_buffer.seek(0)
+        plt.close()
+        
+        img = Image(img_buffer)
+        img.width = 720
+        img.height = 288
+        start_row = 2
+        self.ws.add_image(img, f'N{start_row}')
+    
+    def dividends_graph(self):
+        csv_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "cache", "trading212_history.csv")
+        
+        dividend_data = defaultdict(float)
+        
+        if os.path.exists(csv_path):
+            try:
+                with open(csv_path, 'r', encoding='utf-8') as csvfile:
+                    reader = csv.DictReader(csvfile)
+                    
+                    for row in reader:
+                        action = row.get("Action", "").strip()
+                        time_str = row.get("Time", "").strip()
+                        
+                        if not time_str:
+                            continue
+                            
+                        try:
+                            date_part = time_str.split(" ")[0]
+                            if not date_part:
+                                continue
+                                
+                            date = datetime.strptime(date_part, "%Y-%m-%d")
+                            
+                            if "dividend" in action.lower():
+                                total_str = row.get("Total", "0").strip()
+                                try:
+                                    dividend_amount = float(total_str)
+                                    if dividend_amount > 0:
+                                        dividend_data[date] += dividend_amount
+                                except (ValueError, TypeError):
+                                    continue
+                                    
+                        except (ValueError, IndexError):
+                            continue
+                            
+            except Exception:
+                pass
+        
+        # Create dividends graph
+        plt.style.use('default')
+        fig, ax = plt.subplots(1, 1, figsize=(12, 6))
+        fig.patch.set_facecolor('white')
+        
+        secondary_color = '#70AD47'
         
         if dividend_data:
             dates = sorted(dividend_data.keys())
@@ -499,45 +658,43 @@ class AdvancedAccountInfo:
                 running_total += dividend_data[date]
                 cumulative_dividends.append(running_total)
             
-            ax2.plot(dates, cumulative_dividends, color=secondary_color, linewidth=3, 
+            ax.plot(dates, cumulative_dividends, color=secondary_color, linewidth=3, 
                     marker='s', markersize=5, zorder=3)
-            ax2.fill_between(dates, cumulative_dividends, alpha=0.3, color=secondary_color, zorder=2)
+            ax.fill_between(dates, cumulative_dividends, alpha=0.3, color=secondary_color, zorder=2)
             
-            ax2.set_title('Cumulative Dividend Growth Over Time', fontsize=16, fontweight='bold', 
+            ax.set_title('Cumulative Dividend Growth Over Time', fontsize=16, fontweight='bold', 
                          pad=20, color='#2F4F4F')
-            ax2.set_ylabel('Total Dividends (€)', fontsize=13, fontweight='bold')
-            ax2.set_xlabel('Date', fontsize=13, fontweight='bold')
-            ax2.grid(True, alpha=0.3, linestyle='-', linewidth=0.5)
-            ax2.xaxis.set_major_formatter(mdates.DateFormatter('%b %Y'))
-            ax2.xaxis.set_major_locator(mdates.MonthLocator(interval=1))
+            ax.set_ylabel('Total Dividends (€)', fontsize=13, fontweight='bold')
+            ax.set_xlabel('Date', fontsize=13, fontweight='bold')
+            ax.grid(True, alpha=0.3, linestyle='-', linewidth=0.5)
+            ax.xaxis.set_major_formatter(mdates.DateFormatter('%b %Y'))
+            ax.xaxis.set_major_locator(mdates.MonthLocator(interval=1))
             
             if cumulative_dividends:
                 final_value = cumulative_dividends[-1]
                 total_payments = len(dividend_data)
                 
-                ax2.annotate(f'Total: €{final_value:.2f}', 
+                ax.annotate(f'Total: €{final_value:.2f}', 
                            xy=(dates[-1], final_value), xytext=(20, 20), 
                            textcoords='offset points',
                            bbox=dict(boxstyle='round,pad=0.5', facecolor=secondary_color, alpha=0.8),
                            fontsize=11, color='white', fontweight='bold',
                            arrowprops=dict(arrowstyle='->', color=secondary_color, lw=2))
                 
-                ax2.text(0.02, 0.98, f'Total: {total_payments} dividend payments', 
-                        transform=ax2.transAxes, ha='left', va='top',
+                ax.text(0.02, 0.98, f'Total: {total_payments} dividend payments', 
+                        transform=ax.transAxes, ha='left', va='top',
                         bbox=dict(boxstyle='round,pad=0.3', facecolor='white', alpha=0.8),
                         fontsize=10, fontweight='bold')
         
-        for ax in [ax1, ax2]:
-            ax.spines['top'].set_visible(False)
-            ax.spines['right'].set_visible(False)
-            ax.spines['left'].set_color('gray')
-            ax.spines['bottom'].set_color('gray')
-            plt.setp(ax.xaxis.get_majorticklabels(), rotation=45, ha='right')
-            ax.tick_params(colors='gray', which='both')
-            ax.set_facecolor('#FAFAFA')
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.spines['left'].set_color('gray')
+        ax.spines['bottom'].set_color('gray')
+        plt.setp(ax.xaxis.get_majorticklabels(), rotation=45, ha='right')
+        ax.tick_params(colors='gray', which='both')
+        ax.set_facecolor('#FAFAFA')
         
         plt.tight_layout()
-        plt.subplots_adjust(top=0.92)
         
         img_buffer = io.BytesIO()
         plt.savefig(img_buffer, format='png', dpi=300, bbox_inches='tight', 
@@ -547,12 +704,113 @@ class AdvancedAccountInfo:
         
         img = Image(img_buffer)
         img.width = 720
-        img.height = 576
-        start_row = 2
+        img.height = 288
+        start_row = 20  # Position below capital gains graph
         self.ws.add_image(img, f'N{start_row}')
         
+    def win_loss_statistics(self):
+        csv_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "cache", "trading212_history.csv")
+        
+        total_trades = winning_trades = 0
+        total_pnl = 0.0
+        start_row = getattr(self, 'last_fee_row', 0) + 2
+        start_col = 10
+        
+        if os.path.exists(csv_path):
+            try:
+                with open(csv_path, 'r', encoding='utf-8') as csvfile:
+                    reader = csv.DictReader(csvfile)
+                    for row in reader:
+                        action = row.get("Action", "").strip()
+                        result_str = row.get("Result", "0").strip()
+                        
+                        if action.lower() in ["market buy", "market sell", "stop buy", "stop sell", "limit buy", "limit sell"]:
+                            if result_str and result_str not in ["0", ""]:
+                                try:
+                                    result = float(result_str)
+                                    if abs(result) > 0.01:
+                                        total_trades += 1
+                                        total_pnl += result
+                                        if result > 0:
+                                            winning_trades += 1
+                                except (ValueError, TypeError):
+                                    continue
+            except Exception:
+                pass
+        
+        win_rate = (winning_trades / total_trades * 100) if total_trades > 0 else 0
+        avg_pnl = total_pnl / total_trades if total_trades > 0 else 0
+        
+        title_range = f"J{start_row}:L{start_row}"
+        self.ws.merge_cells(title_range)
+        title_cell = self.ws[f'J{start_row}']
+        title_cell.value = "Win/Loss Statistics"
+        title_cell.font = Font(bold=True)
+        title_cell.fill = self.styles["dark_grey"]
+        for row in self.ws[title_range]:
+            for cell in row:
+                cell.border = self.styles["title_border"]
+        
+        headers = ["Metric", "Value", "Unit"]
+        header_row = start_row + 1
+        for col_offset, header in enumerate(headers):
+            cell = self.ws.cell(row=header_row, column=start_col + col_offset, value=header)
+            cell.fill = self.styles["grey"]
+            cell.border = self.styles["table_border"]
+            cell.font = Font(bold=True)
+        
+        statistics_data = [
+            ("Total Trades", total_trades, "trades"),
+            ("Winning Trades", winning_trades, "trades"),
+            ("Win Rate", round(win_rate, 2), "%"),
+            ("Average P/L per Trade", round(avg_pnl, 2), "EUR")
+        ]
+        
+        row = header_row + 1
+        for metric, value, unit in statistics_data:
+            for col_offset, val in enumerate([metric, value, unit]):
+                cell = self.ws.cell(row=row, column=col_offset + start_col, value=val)
+                cell.border = self.styles["table_border"]
+                
+                if col_offset == 0:
+                    cell.fill = self.styles["grey"]
+                elif col_offset in [1, 2]:
+                    if metric == "Win Rate":
+                        cell.fill = self.styles["green"] if value >= 50 else self.styles["red"]
+                    elif metric == "Average P/L per Trade":
+                        if value > 0:
+                            cell.fill = self.styles["green"]
+                        elif value < 0:
+                            cell.fill = self.styles["red"]
+                        else:
+                            cell.fill = PatternFill(start_color="ffffff", end_color="ffffff", fill_type="solid")
+                    else:
+                        cell.fill = PatternFill(start_color="ffffff", end_color="ffffff", fill_type="solid")
+            row += 1
+        
+        for col_letter, width in {'J': 18, 'K': 12, 'L': 12}.items():
+            self.ws.column_dimensions[col_letter].width = width
+        
+        thin_side = Side(style='thin')
+        last_data_row = row - 1
+        last_col = start_col + len(headers) - 1
+        
+        for r in range(start_row, last_data_row + 1):
+            for c in range(start_col, last_col + 1):
+                cell = self.ws.cell(row=r, column=c)
+                border = cell.border
+                new_border = Border(
+                    left=thin_side if c == start_col else border.left,
+                    right=thin_side if c == last_col else border.right,
+                    top=thin_side if r == start_row else border.top,
+                    bottom=thin_side if r == last_data_row else border.bottom
+                )
+                cell.border = new_border
+
     def generate_sheet(self):
         self.order_history()
         self.wait_times_analysis()
         self.fee_analysis()
-        self.capital_gains_and_dividends_analysis()
+        self.win_loss_statistics()
+        self.capital_gains_graph()
+        self.dividends_graph()

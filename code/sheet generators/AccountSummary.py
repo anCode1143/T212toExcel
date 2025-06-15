@@ -2,6 +2,7 @@ import os
 import csv
 import os
 import csv
+import yfinance as yf
 from openpyxl.styles import Font, PatternFill, Border, Side
 from AccountData import get_cash_info, get_open_positions, get_pies
 
@@ -64,6 +65,86 @@ class AccountSummary:
         positions = sorted(positions, key=lambda x: x.get("ppl", 0), reverse=True)
         start_col, start_row = 6, 2
         
+        # Create ticker to ISIN mapping from trading history CSV
+        ticker_to_isin = {}
+        ticker_to_currency = {}
+        csv_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "cache", "trading212_history.csv")
+        
+        if os.path.exists(csv_path):
+            with open(csv_path, 'r', encoding='utf-8') as csvfile:
+                reader = csv.DictReader(csvfile)
+                for row in reader:
+                    ticker = row.get("Ticker", "")
+                    isin = row.get("ISIN", "")
+                    currency = row.get("Currency (Price / share)", "")
+                    if ticker and isin:
+                        ticker_to_isin[ticker] = isin
+                        if currency:
+                            ticker_to_currency[ticker] = currency
+        
+        def is_uk_security_in_pence(isin, ticker, trading_currency=None):
+            """Check if a security is quoted in pence, requiring conversion."""
+            # First check if we have trading currency info from T212 history
+            if trading_currency == "GBX":
+                return True
+            
+            # Then check if it's a UK security
+            if not isin or not isin.startswith("GB"):
+                return False
+            
+            try:
+                # Convert T212 ticker to Yahoo Finance ticker format
+                # Remove the suffix and add .L for London Stock Exchange
+                base_ticker = ticker.split("_")[0]
+                
+                # Common T212 to Yahoo Finance ticker mappings for UK securities
+                ticker_mappings = {
+                    "PSN": "PSN.L",     # Persimmon
+                    "SVS": "SVS.L",     # Savills  
+                    "TW": "TW.L",       # Taylor Wimpey
+                    "BLND": "BLND.L",   # British Land
+                    "COPAP": "COPA.L",  # WisdomTree Copper (might be different)
+                    "OD7Z": "ODGD.L",   # WisdomTree Industrial Metals (might be different)
+                    "SUGA": "SUGA.L",   # WisdomTree Sugar (might be different)
+                    "AIGAP": "AIGA.L",  # WisdomTree Agriculture (might be different)
+                }
+                
+                # Use mapping if available, otherwise try adding .L
+                if base_ticker in ticker_mappings:
+                    yahoo_ticker = ticker_mappings[base_ticker]
+                else:
+                    # Remove trailing 'l' or 'L' if present and add .L
+                    if base_ticker.endswith(('l', 'L')):
+                        base_ticker = base_ticker[:-1]
+                    yahoo_ticker = f"{base_ticker}.L"
+                
+                # Suppress yfinance and HTTP library output and errors
+                import warnings, logging, requests
+                # ignore TLS warnings and suppress urllib3 warnings
+                warnings.filterwarnings("ignore", message="Unverified HTTPS request")
+                requests.packages.urllib3.disable_warnings()
+                logging.getLogger("yfinance").setLevel(logging.CRITICAL)
+                logging.getLogger("urllib3").setLevel(logging.CRITICAL)
+                logging.getLogger("requests").setLevel(logging.CRITICAL)
+                
+                stock = yf.Ticker(yahoo_ticker)
+                info = stock.info
+                currency = info.get("currency", "")
+                
+                # If currency is GBp (pence), we need to convert to pounds
+                return currency == "GBp"
+            except Exception:
+                # Silently handle all errors (HTTP, network, parsing, etc.)
+                # For UK securities, assume pence if we can't determine otherwise
+                # This is a reasonable default for most UK stocks
+                return True  # Conservative approach - convert if unsure
+        
+        def convert_price_if_needed(price, isin, ticker, trading_currency=None):
+            """Convert price from pence to pounds if needed for UK securities."""
+            if is_uk_security_in_pence(isin, ticker, trading_currency):
+                return price / 100.0
+            return price
+        
         # Title
         title_range = "F2:K2"
         self.ws.merge_cells(title_range)
@@ -87,13 +168,31 @@ class AccountSummary:
         # Data rows
         row = header_row + 1
         for pos in positions:
-            ticker = pos.get("ticker", "N/A").split("_")[0]
+            full_ticker = pos.get("ticker", "N/A")
+            ticker = full_ticker.split("_")[0]
+            
+            # Handle T212 ticker format - remove trailing 'l' if present (London exchange indicator)
+            if ticker.endswith('l') and len(ticker) > 1:
+                clean_ticker = ticker[:-1]
+            else:
+                clean_ticker = ticker
+                
             quantity = round(pos.get("quantity") or 0.0, 2)
             avg_price = round(pos.get("averagePrice") or 0.0, 2)
             current_price = round(pos.get("currentPrice") or 0.0, 2)
             ppl = round(pos.get("ppl") or 0.0, 2)
             fx_ppl = round(pos.get("fxPpl") or 0.0, 2)
-            values = [ticker, quantity, avg_price, current_price, ppl, fx_ppl]
+            
+            # Get ISIN and currency for this ticker
+            isin = ticker_to_isin.get(clean_ticker, "")
+            trading_currency = ticker_to_currency.get(clean_ticker, "")
+            
+            # Convert prices from pence to pounds if needed
+            avg_price = round(convert_price_if_needed(avg_price, isin, clean_ticker, trading_currency), 2)
+            current_price = round(convert_price_if_needed(current_price, isin, clean_ticker, trading_currency), 2)
+            
+            # Use clean ticker for display
+            values = [clean_ticker, quantity, avg_price, current_price, ppl, fx_ppl]
             row_fill = self.styles["green"] if ppl > 0 else self.styles["red"] if ppl < 0 else self.styles["grey"]
             
             for col_offset, val in enumerate(values):

@@ -5,9 +5,9 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Border, Side
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from datetime import datetime
 from AccountSummary import AccountSummary
 from AdvancedAccountInfo import AdvancedAccountInfo
+from AiAnalyser import AiAnalyser
 
 CACHE_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "cache")
 
@@ -129,7 +129,7 @@ def make_xslx():
         "green": PatternFill(start_color="c3e8cb", end_color="c3e8cb", fill_type="solid")
     }
 
-    # Create instances of both classes
+    # Create instances of all classes
     account_summary = AccountSummary(
         wb=wb, 
         ws=ws, 
@@ -147,12 +147,20 @@ def make_xslx():
         apply_border_func=apply_table_border
     )
     
-    # Generate both sheets
+    ai_analyser = AiAnalyser(
+        wb=wb,
+        styles=styles,
+        load_cached_func=load_cached,
+        apply_border_func=apply_table_border
+    )
+    
+    # Generate all sheets
     account_summary.generate_sheet()
     advanced_account_info.generate_sheet()
+    ai_analyser.generate_sheet()
 
     # Save the workbook
     wb.save("AccountAnalysis.xlsx")
-
+    print("✅ ExcelGenerator call completed.")
 if __name__ == "__main__":
     make_xslx()

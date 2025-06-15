@@ -14,7 +14,7 @@ def save_json(data, filename):
     with open(os.path.join(CACHE_DIR, filename), "w") as f:
         json.dump(data, f, indent=2)
 
-if __name__ == "__main__":
+def create_cache_data():
     print("Fetching and caching Trading212 data...")
 
     save_json(get_cash_info(), "cash_info.json")

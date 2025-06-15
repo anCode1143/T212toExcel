@@ -91,7 +91,7 @@ def export_account_history():
     except Exception:
         return False
 
-    print(f"📊 Export queued (ID: {report_id}). Waiting for completion...")
+    print(f"📊 Export queued (ID: {report_id}). Takes ~70 seconds")
     
     # Poll for completion
     for attempt in range(10):
