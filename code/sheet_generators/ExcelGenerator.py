@@ -5,9 +5,9 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Border, Side
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from AccountSummary import AccountSummary
-from AdvancedAccountInfo import AdvancedAccountInfo
-from AiAnalyser import AiAnalyser
+from sheet_generators.AccountSummary import AccountSummary
+from sheet_generators.AdvancedAccountInfo import AdvancedAccountInfo
+from sheet_generators.AiAnalyser import AiAnalyser
 
 CACHE_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "cache")
 
@@ -18,10 +18,9 @@ def load_cached(name, fallback_func):
             return json.load(f)
     return fallback_func()
 
-# Helper functions for Excel operations
+# Excel operations helper functions
 
 def create_title(ws, title_text, title_range, fill_color=None, font_bold=True, font_size=None):
-    """Create a styled title for a table section"""
     ws.merge_cells(title_range)
     
     # Extract first cell reference from the range
@@ -47,7 +46,6 @@ def create_title(ws, title_text, title_range, fill_color=None, font_bold=True, f
     return title_cell
 
 def create_headers(ws, headers, start_row, start_col, fill_color=None, border=None, font_bold=True):
-    """Create styled headers for a table"""
     for col_offset, header in enumerate(headers):
         col = start_col + col_offset
         cell = ws.cell(row=start_row, column=col, value=header)
@@ -58,15 +56,13 @@ def create_headers(ws, headers, start_row, start_col, fill_color=None, border=No
         if font_bold:
             cell.font = Font(bold=True)
     
-    return start_row + 1  # Return the next row index
+    return start_row + 1 
 
 def set_column_widths(ws, width_map):
-    """Set column widths based on a dictionary mapping"""
     for col_letter, width in width_map.items():
         ws.column_dimensions[col_letter].width = width
 
 def apply_table_border(ws, first_row, last_row, first_col, last_col):
-    """Apply full border to a table range"""
     thin_side = Side(style='thin')
     
     for r in range(first_row, last_row + 1):
@@ -82,7 +78,6 @@ def apply_table_border(ws, first_row, last_row, first_col, last_col):
             cell.border = new_border
 
 def extract_date(date_time_str):
-    """Extract date part from a datetime string"""
     if " " in date_time_str:
         return date_time_str.split(" ")[0]
     elif "T" in date_time_str:
@@ -91,9 +86,8 @@ def extract_date(date_time_str):
         return date_time_str
 
 def read_csv_data(csv_path):
-    """Read data from a CSV file safely"""
     data = []
-    # Make path absolute if it's not already
+    # Make path absolute
     if not os.path.isabs(csv_path):
         csv_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), csv_path)
     if os.path.exists(csv_path):
@@ -104,14 +98,12 @@ def read_csv_data(csv_path):
     return data
 
 def make_xslx():
-    # Create a new workbook and select the active worksheet
     wb = Workbook()
     ws = wb.active
     ws.title = "Account Summary"
     
     wb.create_sheet("Advanced Account Info")
 
-    # Styles
     styles = {
         "table_border": Border(
             top=Side(style='thin'),
@@ -129,7 +121,6 @@ def make_xslx():
         "green": PatternFill(start_color="c3e8cb", end_color="c3e8cb", fill_type="solid")
     }
 
-    # Create instances of all classes
     account_summary = AccountSummary(
         wb=wb, 
         ws=ws, 
@@ -153,13 +144,11 @@ def make_xslx():
         load_cached_func=load_cached,
         apply_border_func=apply_table_border
     )
-    
-    # Generate all sheets
+
     account_summary.generate_sheet()
     advanced_account_info.generate_sheet()
     ai_analyser.generate_sheet()
 
-    # Save the workbook
     wb.save("AccountAnalysis.xlsx")
     print("✅ ExcelGenerator call completed.")
 if __name__ == "__main__":

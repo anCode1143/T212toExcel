@@ -4,11 +4,15 @@ import requests
 import os
 from dotenv import load_dotenv
 
-load_dotenv()
+# Load .env file from the project root
+env_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env')
+load_dotenv(env_path)
 
 API_KEY = os.getenv("T212_API_KEY")
+IS_DEMO = os.getenv("T212_DEMO", "false").lower() == "true"
 
-BASE_URL = 'https://live.trading212.com/api/v0'
+# Use demo or live endpoint based on account type
+BASE_URL = 'https://demo.trading212.com/api/v0' if IS_DEMO else 'https://live.trading212.com/api/v0'
 headers = {
     "Authorization": API_KEY
 }
@@ -24,8 +28,20 @@ def get_open_positions():
 def get_cash_info():
     url = f"{BASE_URL}/equity/account/cash"
     r = requests.get(url, headers=headers)
+
     print("NOTE: due to the nature of T212's internal logic APIs (which are still in their beta), account figures can be off")
-    return r.json()
+    print(f"Status code: {r.status_code}")
+    
+    if r.status_code != 200:
+        print(f"❌ Error fetching cash info: {r.status_code} - {r.text[:200]}")
+        return {}  # Return empty dict or handle differently
+
+    try:
+        return r.json()
+    except Exception as e:
+        print("❌ Failed to parse JSON:", e)
+        print("Raw response text:", r.text[:200])
+        return {}
 
 def get_pies(include_detailed=False):
     """Fetch all pies for the account from Trading 212 API.

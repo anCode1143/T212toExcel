@@ -181,16 +181,13 @@ class AiAnalyser:
             return {"AI Portfolio Analysis": "AI analysis unavailable - Error occurred during analysis"}
     
     def create_text_image(self, text, width=1000, font_size=14):
-        """Create a high-quality image from text with proper word wrapping"""
         # Set up basic parameters for better quality
-        line_height = int(font_size * 1.5)  # Increased line spacing
-        padding = 30  # Increased padding
-        background_color = (255, 255, 255)  # Pure white background for better readability
-        text_color = (33, 37, 41)  # Dark text
+        line_height = int(font_size * 1.5)
+        padding = 30
+        background_color = (255, 255, 255) 
+        text_color = (33, 37, 41)
         
-        # Try to use a system font, fallback to default if not available
         try:
-            # Try common system fonts with larger size
             font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", font_size)
         except (OSError, IOError):
             try:
@@ -202,40 +199,33 @@ class AiAnalyser:
                     font = ImageFont.load_default()
         
         # Wrap text to fit the width with better character estimation
-        chars_per_line = int(width / (font_size * 0.55))  # Better estimation for readability
+        chars_per_line = int(width / (font_size * 0.55))
         wrapper = textwrap.TextWrapper(width=chars_per_line, break_long_words=False, break_on_hyphens=False)
         wrapped_lines = []
         
-        # Process paragraphs separately for better formatting
         paragraphs = text.split('\n\n')
         for i, paragraph in enumerate(paragraphs):
             if paragraph.strip():
-                # Handle existing line breaks within paragraphs
                 para_lines = paragraph.split('\n')
                 for line in para_lines:
                     if line.strip():
                         wrapped = wrapper.wrap(line.strip())
                         wrapped_lines.extend(wrapped)
                 
-                # Add spacing between paragraphs (except for the last one)
                 if i < len(paragraphs) - 1:
                     wrapped_lines.append('')
         
-        # Calculate image height with extra space
-        height = (len(wrapped_lines) * line_height) + (2 * padding) + 50  # Extra 50px buffer
+        height = (len(wrapped_lines) * line_height) + (2 * padding) + 50 
         
-        # Create high-resolution image
         img = PILImage.new('RGB', (width, height), background_color)
         draw = ImageDraw.Draw(img)
         
-        # Draw text with anti-aliasing
         y_position = padding
         for line in wrapped_lines:
-            if line:  # Only draw non-empty lines
+            if line: 
                 draw.text((padding, y_position), line, font=font, fill=text_color)
             y_position += line_height
         
-        # Save to bytes buffer with high quality
         img_buffer = io.BytesIO()
         img.save(img_buffer, format='PNG', optimize=False, quality=100)
         img_buffer.seek(0)
@@ -245,7 +235,6 @@ class AiAnalyser:
     def create_insights_table(self, insights, start_row=2):
         start_col = 2
         
-        # Create title row
         title_range = f"B{start_row}:I{start_row}"
         self.ws.merge_cells(title_range)
         title_cell = self.ws.cell(row=start_row, column=start_col, value="AI Portfolio Analysis & Recommendations")
@@ -257,22 +246,16 @@ class AiAnalyser:
             for cell in row:
                 cell.border = self.styles["title_border"]
         
-        # Create image from AI analysis text
         analysis_content = insights.get("AI Portfolio Analysis", "No analysis available")
         
-        # Generate image from text
         img_buffer = self.create_text_image(analysis_content, width=900, font_size=13)
         
-        # Insert image into worksheet
         img = Image(img_buffer)
         
-        # Position image starting from row after title
         img.anchor = f"B{start_row + 2}"
         
-        # Add image to worksheet
         self.ws.add_image(img)
         
-        # Set column widths to accommodate the image
         column_widths = {
             'B': 12, 'C': 15, 'D': 15, 'E': 15, 'F': 15, 
             'G': 15, 'H': 15, 'I': 15
@@ -280,8 +263,6 @@ class AiAnalyser:
         for col, width in column_widths.items():
             self.ws.column_dimensions[col].width = width
         
-        # Return a reasonable next row (estimate based on image height)
-        # Assuming roughly 600px image height = ~30 rows at 20px per row
         estimated_image_rows = 30
         return start_row + 2 + estimated_image_rows
     

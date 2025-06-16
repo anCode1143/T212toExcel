@@ -1,0 +1,7 @@
+python-dotenv
+requests
+openai
+openpyxl
+Pillow
+yfinance
+matplotlib

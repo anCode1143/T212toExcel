@@ -1,13 +1,10 @@
 .env
 
-# Ignore venv and Python-related junk
 venv/
 __pycache__/
 *.pyc
 
-# IDE folders
 .vscode/
 .idea/
 
-# macOS junk
 .DS_Store

@@ -96,31 +96,12 @@ class AccountSummary:
                 # Convert T212 ticker to Yahoo Finance ticker format
                 # Remove the suffix and add .L for London Stock Exchange
                 base_ticker = ticker.split("_")[0]
-                
-                # Common T212 to Yahoo Finance ticker mappings for UK securities
-                ticker_mappings = {
-                    "PSN": "PSN.L",     # Persimmon
-                    "SVS": "SVS.L",     # Savills  
-                    "TW": "TW.L",       # Taylor Wimpey
-                    "BLND": "BLND.L",   # British Land
-                    "COPAP": "COPA.L",  # WisdomTree Copper (might be different)
-                    "OD7Z": "ODGD.L",   # WisdomTree Industrial Metals (might be different)
-                    "SUGA": "SUGA.L",   # WisdomTree Sugar (might be different)
-                    "AIGAP": "AIGA.L",  # WisdomTree Agriculture (might be different)
-                }
-                
-                # Use mapping if available, otherwise try adding .L
-                if base_ticker in ticker_mappings:
-                    yahoo_ticker = ticker_mappings[base_ticker]
-                else:
-                    # Remove trailing 'l' or 'L' if present and add .L
-                    if base_ticker.endswith(('l', 'L')):
-                        base_ticker = base_ticker[:-1]
-                    yahoo_ticker = f"{base_ticker}.L"
+                if base_ticker.endswith(('l', 'L')):
+                    base_ticker = base_ticker[:-1]
+                yahoo_ticker = f"{base_ticker}.L"
                 
                 # Suppress yfinance and HTTP library output and errors
                 import warnings, logging, requests
-                # ignore TLS warnings and suppress urllib3 warnings
                 warnings.filterwarnings("ignore", message="Unverified HTTPS request")
                 requests.packages.urllib3.disable_warnings()
                 logging.getLogger("yfinance").setLevel(logging.CRITICAL)
@@ -134,18 +115,13 @@ class AccountSummary:
                 # If currency is GBp (pence), we need to convert to pounds
                 return currency == "GBp"
             except Exception:
-                # Silently handle all errors (HTTP, network, parsing, etc.)
-                # For UK securities, assume pence if we can't determine otherwise
-                # This is a reasonable default for most UK stocks
-                return True  # Conservative approach - convert if unsure
+                return True
         
         def convert_price_if_needed(price, isin, ticker, trading_currency=None):
-            """Convert price from pence to pounds if needed for UK securities."""
             if is_uk_security_in_pence(isin, ticker, trading_currency):
                 return price / 100.0
             return price
         
-        # Title
         title_range = "F2:K2"
         self.ws.merge_cells(title_range)
         title_cell = self.ws['F2']
@@ -156,7 +132,6 @@ class AccountSummary:
             for cell in row:
                 cell.border = self.styles["title_border"]
         
-        # Headers
         headers = ["Ticker", "Quantity", "Avg. Price", "Current Price", "P/L", "FX P/L"]
         header_row = start_row + 1
         for col_offset, header in enumerate(headers):
@@ -165,13 +140,12 @@ class AccountSummary:
             cell.border = self.styles["table_border"]
             cell.font = Font(bold=True)
         
-        # Data rows
         row = header_row + 1
         for pos in positions:
             full_ticker = pos.get("ticker", "N/A")
             ticker = full_ticker.split("_")[0]
             
-            # Handle T212 ticker format - remove trailing 'l' if present (London exchange indicator)
+            # Remove trailing 'l' if present (London exchange indicator)
             if ticker.endswith('l') and len(ticker) > 1:
                 clean_ticker = ticker[:-1]
             else:
@@ -183,15 +157,13 @@ class AccountSummary:
             ppl = round(pos.get("ppl") or 0.0, 2)
             fx_ppl = round(pos.get("fxPpl") or 0.0, 2)
             
-            # Get ISIN and currency for this ticker
             isin = ticker_to_isin.get(clean_ticker, "")
             trading_currency = ticker_to_currency.get(clean_ticker, "")
             
-            # Convert prices from pence to pounds if needed
+            # Convert prices from pence to pounds
             avg_price = round(convert_price_if_needed(avg_price, isin, clean_ticker, trading_currency), 2)
             current_price = round(convert_price_if_needed(current_price, isin, clean_ticker, trading_currency), 2)
             
-            # Use clean ticker for display
             values = [clean_ticker, quantity, avg_price, current_price, ppl, fx_ppl]
             row_fill = self.styles["green"] if ppl > 0 else self.styles["red"] if ppl < 0 else self.styles["grey"]
             
@@ -207,7 +179,6 @@ class AccountSummary:
                     cell.fill = row_fill
             row += 1
         
-        # Set column widths and apply border
         for col_letter in ['F', 'G', 'H', 'I', 'J', 'K']:
             self.ws.column_dimensions[col_letter].width = 15
         
@@ -239,7 +210,6 @@ class AccountSummary:
         
         start_col, start_row = 2, 11
         
-        # Title
         title_range = "B11:D11"
         self.ws.merge_cells(title_range)
         title_cell = self.ws['B11']
@@ -250,7 +220,6 @@ class AccountSummary:
             for cell in row:
                 cell.border = self.styles["title_border"]
         
-        # Headers
         headers = ["Date", "Transaction Type", "Amount"]
         header_row = start_row + 1
         for col_offset, header in enumerate(headers):
@@ -259,7 +228,6 @@ class AccountSummary:
             cell.fill = self.styles["grey"]
             cell.border = self.styles["table_border"]
         
-        # Data rows
         row = header_row + 1
         for tx in transactions_info:
             tx_type = tx.get("type", "N/A")
@@ -280,7 +248,6 @@ class AccountSummary:
                 cell.fill = row_fill if col_offset == 0 else value_fill
             row += 1
         
-        # Set column widths
         for col_letter in ['B', 'C', 'D']:
             self.ws.column_dimensions[col_letter].width = 15
         
@@ -297,23 +264,20 @@ class AccountSummary:
             detailed = pie.get("detailed", {})
             instruments = detailed.get("instruments", [])
             
-            # Skip pies with no assets or value
+            # Skip null pies
             if not instruments:
                 continue
             total_value = sum(inst.get("result", {}).get("priceAvgValue", 0) for inst in instruments)
             if total_value == 0:
                 continue
             
-            # Sort instruments by performance (greatest gains to greatest losses)
             instruments = sorted(instruments, key=lambda x: x.get("result", {}).get("priceAvgResultCoef", 0), reverse=True)
             
-            # Get pie summary data
             pie_result = pie.get("result", {})
             total_invested = round(pie_result.get("priceAvgInvestedValue", 0), 2)
             pie_pl = round(pie_result.get("priceAvgResult", 0), 2)
             pie_pl_percent = round(pie_result.get("priceAvgResultCoef", 0) * 100, 2)
             
-            # Title
             title_range = self.ws.cell(row=start_row, column=start_col).coordinate + ":" + self.ws.cell(row=start_row, column=start_col+4).coordinate
             self.ws.merge_cells(title_range)
             title_cell = self.ws.cell(row=start_row, column=start_col)
@@ -324,7 +288,6 @@ class AccountSummary:
                 cell = self.ws.cell(row=start_row, column=col)
                 cell.border = self.styles["title_border"]
             
-            # Holdings header
             holdings_row = start_row + 1
             subheaders = ["Ticker", "Weight %", "Performance %", "Quantity", "Value"]
             for col_offset, subheader in enumerate(subheaders):
@@ -334,10 +297,9 @@ class AccountSummary:
                 cell.fill = self.styles["grey"]
                 cell.border = self.styles["table_border"]
             
-            # Holdings data
             row = holdings_row + 1
             for inst in instruments:
-                ticker = inst.get("ticker", "").split("_")[0]  # Clean ticker
+                ticker = inst.get("ticker", "").split("_")[0]
                 weight = round(inst.get("currentShare", 0) * 100, 2)
                 perf = round(inst.get("result", {}).get("priceAvgResultCoef", 0) * 100, 2)
                 qty = round(inst.get("ownedQuantity", 0), 4)
@@ -355,7 +317,6 @@ class AccountSummary:
                         cell.fill = row_fill
                 row += 1
             
-            # Total value row
             total_row = row
             self.ws.cell(row=total_row, column=start_col, value="Total Pie Value:").font = Font(bold=True)
             self.ws.cell(row=total_row, column=start_col+4, value=round(total_value, 2)).font = Font(bold=True)
@@ -364,7 +325,6 @@ class AccountSummary:
                 cell.border = self.styles["table_border"]
                 cell.fill = self.styles["grey"]
             
-            # Pie Summary Section
             summary_row = total_row + 1
             summary_labels = ["Initial Investment:", "Pie P/L:", "P/L %:"]
             summary_values = [total_invested, pie_pl, pie_pl_percent]
@@ -385,13 +345,12 @@ class AccountSummary:
                 else:
                     value_fill = self.styles["grey"]
                 
-                # Apply styling and borders to all cells in the row
                 for col in range(start_col, start_col+5):
                     cell = self.ws.cell(row=summary_row + i, column=col)
                     cell.border = self.styles["table_border"]
-                    if col == start_col + 4:  # Value column
+                    if col == start_col + 4:
                         cell.fill = value_fill
-                    else:  # Label and middle columns
+                    else:
                         cell.fill = self.styles["grey"]
             
             last_summary_row = summary_row + len(summary_labels) - 1
@@ -414,7 +373,6 @@ class AccountSummary:
                     )
                     cell.border = new_border
             
-            # Set column widths
             for col_idx in range(start_col, start_col+5):
                 col_letter = chr(64 + col_idx)
                 self.ws.column_dimensions[col_letter].width = 15

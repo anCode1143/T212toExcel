@@ -27,12 +27,8 @@ class AdvancedAccountInfo:
         ticker_to_currency = {}
         
         def is_uk_security_in_pence(isin, ticker, trading_currency=None):
-            """Check if a security is quoted in pence, requiring conversion."""
-            # First check if we have trading currency info from T212 history
             if trading_currency == "GBX":
                 return True
-            
-            # Then check if it's a UK security
             if not isin or not isin.startswith("GB"):
                 return False
             
@@ -41,27 +37,9 @@ class AdvancedAccountInfo:
                 # Convert T212 ticker to Yahoo Finance ticker format
                 # Remove the suffix and add .L for London Stock Exchange
                 base_ticker = ticker.split("_")[0]
-                
-                # Common T212 to Yahoo Finance ticker mappings for UK securities
-                ticker_mappings = {
-                    "PSN": "PSN.L",     # Persimmon
-                    "SVS": "SVS.L",     # Savills  
-                    "TW": "TW.L",       # Taylor Wimpey
-                    "BLND": "BLND.L",   # British Land
-                    "COPAP": "COPA.L",  # WisdomTree Copper (might be different)
-                    "OD7Z": "ODGD.L",   # WisdomTree Industrial Metals (might be different)
-                    "SUGA": "SUGA.L",   # WisdomTree Sugar (might be different)
-                    "AIGAP": "AIGA.L",  # WisdomTree Agriculture (might be different)
-                }
-                
-                # Use mapping if available, otherwise try adding .L
-                if base_ticker in ticker_mappings:
-                    yahoo_ticker = ticker_mappings[base_ticker]
-                else:
-                    # Remove trailing 'l' or 'L' if present and add .L
-                    if base_ticker.endswith(('l', 'L')):
-                        base_ticker = base_ticker[:-1]
-                    yahoo_ticker = f"{base_ticker}.L"
+                if base_ticker.endswith(('l', 'L')):
+                    base_ticker = base_ticker[:-1]
+                yahoo_ticker = f"{base_ticker}.L"
                 
                 # Suppress yfinance and HTTP library output and errors
                 import warnings, logging, requests
@@ -74,16 +52,12 @@ class AdvancedAccountInfo:
                 info = stock.info
                 currency = info.get("currency", "")
                 
-                # If currency is GBp (pence), we need to convert to pounds
                 return currency == "GBp"
             except Exception as e:
                 print(f"Warning: Could not determine currency for {ticker} ({yahoo_ticker if 'yahoo_ticker' in locals() else 'unknown'}): {e}")
-                # For UK securities, assume pence if we can't determine otherwise
-                # This is a reasonable default for most UK stocks
-                return True  # Conservative approach - convert if unsure
+                return True
         
         def convert_price_if_needed(price, isin, ticker, trading_currency=None):
-            """Convert price from pence to pounds if needed for UK securities."""
             if is_uk_security_in_pence(isin, ticker, trading_currency):
                 return price / 100.0
             return price
@@ -120,21 +94,18 @@ class AdvancedAccountInfo:
                         order_type = "Buy" if "buy" in action.lower() else "Sell"
                         ticker = row.get("Ticker", "")
                         
-                        # Handle T212 ticker format - remove trailing 'l' if present
                         clean_ticker = ticker
                         if ticker.endswith('l') and len(ticker) > 1:
                             clean_ticker = ticker[:-1]
                         
-                        # Get ISIN and currency for this ticker
                         isin = ticker_to_isin.get(clean_ticker, "")
                         trading_currency = ticker_to_currency.get(clean_ticker, "")
                         
-                        # Convert price from pence to pounds if needed
                         converted_price = convert_price_if_needed(price, isin, clean_ticker, trading_currency)
                         
                         transactions_info.append({
                             "dateTime": row.get("Time", ""),
-                            "ticker": clean_ticker,  # Use clean ticker for display
+                            "ticker": clean_ticker,
                             "name": row.get("Name", ""),
                             "orderType": order_type,
                             "quantity": qty,
@@ -147,7 +118,6 @@ class AdvancedAccountInfo:
         transactions_info.sort(key=lambda x: x.get("dateTime", ""), reverse=True)
         start_col, start_row = 2, 2
         
-        # Add search instructions
         instruction_cell = self.ws.cell(row=start_row, column=start_col)
         instruction_cell.value = "💡 Use Excel's filter buttons in the header row to search and filter transactions"
         instruction_cell.font = Font(italic=True, size=12.5)
@@ -155,7 +125,6 @@ class AdvancedAccountInfo:
         self.ws.merge_cells(start_row=start_row, start_column=start_col, 
                             end_row=start_row, end_column=start_col + 6)
         
-        # Title
         title_row = start_row + 1
         title_range = f"B{title_row}:H{title_row}"
         self.ws.merge_cells(title_range)
@@ -167,7 +136,6 @@ class AdvancedAccountInfo:
             for cell in row:
                 cell.border = self.styles["title_border"]
         
-        # Headers
         headers = ["Date", "Ticker", "Asset Name", "Order Type", "Quantity", "Price/Unit", "Total Value"]
         header_row = title_row + 1
         for col_offset, header in enumerate(headers):
@@ -176,7 +144,6 @@ class AdvancedAccountInfo:
             cell.border = self.styles["table_border"]
             cell.font = Font(bold=True)
         
-        # Data rows
         row = header_row + 1
         for tx in transactions_info:
             date = self.extract_date(tx.get("dateTime", ""))
@@ -202,18 +169,15 @@ class AdvancedAccountInfo:
                     cell.fill = row_fill
             row += 1
         
-        # Set column widths
         column_widths = {'B': 15, 'C': 12, 'D': 35, 'E': 12, 'F': 15, 'G': 15, 'H': 15}
         for col_letter, width in column_widths.items():
             self.ws.column_dimensions[col_letter].width = width
         
         last_data_row = row - 1 if transactions_info else header_row
         
-        # Apply table border
         self.apply_table_border(ws=self.ws, first_row=start_row, last_row=last_data_row, 
                                first_col=start_col, last_col=start_col + len(headers) - 1)
         
-        # Add Excel AutoFilter
         if transactions_info:
             filter_range = f"B{header_row}:E{last_data_row}"
             self.ws.auto_filter.ref = filter_range
@@ -310,7 +274,6 @@ class AdvancedAccountInfo:
         
         start_col, start_row = 10, 2
         
-        # Title
         title_range = f"J{start_row}:L{start_row}"
         self.ws.merge_cells(title_range)
         title_cell = self.ws[f'J{start_row}']
@@ -324,7 +287,6 @@ class AdvancedAccountInfo:
         
         row = start_row + 1
         
-        # Average Hold Time row
         blue_fill = PatternFill(start_color="e6f3ff", end_color="e6f3ff", fill_type="solid")
         
         cells = [
@@ -340,9 +302,7 @@ class AdvancedAccountInfo:
         
         row += 1
 
-        # Sub-header and data for longest held assets
         if top_3_longest_holds:
-            # Sub-header
             sub_header_range = f"{chr(64 + start_col)}{row}:{chr(64 + start_col + 2)}{row}"
             self.ws.merge_cells(sub_header_range)
             self.ws.cell(row=row, column=start_col, value="Longest Held Unique Assets:").font = Font(bold=True)
@@ -353,7 +313,6 @@ class AdvancedAccountInfo:
             
             row += 1
 
-            # Data rows for top 3 longest held assets
             for item in top_3_longest_holds:
                 cells = [
                     (start_col, item['ticker'], self.styles["grey"]),
@@ -367,11 +326,9 @@ class AdvancedAccountInfo:
                     cell.border = self.styles["table_border"]
                 row += 1
         
-        # Set column widths
         for col_letter, width in {'J': 35, 'K': 15, 'L': 10}.items():
             self.ws.column_dimensions[col_letter].width = width
         
-        # Apply border to entire table
         thin_side = Side(style='thin')
         last_row = row - 1
         
@@ -387,14 +344,12 @@ class AdvancedAccountInfo:
                 )
                 cell.border = new_border
                 
-        # Store the last row number for use by fee_analysis
         self.last_wait_times_row = last_row
 
     def fee_analysis(self):
         fee_breakdown = {}
         csv_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "cache", "trading212_history.csv")
         
-        # Add gap of 2 rows from wait_times_analysis
         start_row = getattr(self, 'last_wait_times_row', 0) + 2
         start_col = 10
         
@@ -423,7 +378,6 @@ class AdvancedAccountInfo:
         
         total_fees = sum(fee_breakdown.values()) if fee_breakdown else 0
         
-        # Create title
         title_range = f"J{start_row}:L{start_row}"
         self.ws.merge_cells(title_range)
         title_cell = self.ws[f'J{start_row}']
@@ -434,7 +388,6 @@ class AdvancedAccountInfo:
             for cell in row:
                 cell.border = self.styles["title_border"]
         
-        # Create headers
         headers = ["Fee Type", "Amount", "Currency"]
         header_row = start_row + 1
         for col_offset, header in enumerate(headers):
@@ -443,37 +396,31 @@ class AdvancedAccountInfo:
             cell.border = self.styles["table_border"]
             cell.font = Font(bold=True)
         
-        # Add fee data rows
         row = header_row + 1
         for fee_type, amount in sorted(fee_breakdown.items()):
             values = [fee_type, round(amount, 2), "EUR"]
             for col_offset, val in enumerate(values):
                 cell = self.ws.cell(row=row, column=start_col + col_offset, value=val)
                 cell.border = self.styles["table_border"]
-                # Make fee type column grey, amount and currency columns red
-                if col_offset == 0:  # Fee Type column
+                if col_offset == 0:
                     cell.fill = self.styles["grey"]
-                else:  # Amount and Currency columns
+                else: 
                     cell.fill = self.styles["red"]
             row += 1
         
-        # Add total row if fees exist
         if fee_breakdown:
             for col_offset, val in enumerate(["TOTAL FEES", round(total_fees, 2), "EUR"]):
                 cell = self.ws.cell(row=row, column=start_col + col_offset, value=val)
                 cell.border = self.styles["table_border"]
                 cell.font = Font(bold=True)
-                # Make total fee label grey, amount and currency columns red
-                if col_offset == 0:  # Fee Type column
+                if col_offset == 0: 
                     cell.fill = self.styles["grey"]
-                else:  # Amount and Currency columns
+                else: 
                     cell.fill = self.styles["red"]
         
-        # Set column widths
         for col_letter, width in {'J': 18, 'K': 12, 'L': 12}.items():
             self.ws.column_dimensions[col_letter].width = width
         
-        # Apply border to entire table
         thin_side = Side(style='thin')
         last_data_row = row if fee_breakdown else header_row
         last_col = start_col + len(headers) - 1
@@ -490,7 +437,6 @@ class AdvancedAccountInfo:
                 )
                 cell.border = new_border
         
-        # Store the last row number for use by trading_statistics_analysis
         self.last_fee_row = last_data_row
                 
     def capital_gains_graph(self):
