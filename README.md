@@ -6,10 +6,11 @@
 
 ## Setup
 
-1.  **Clone the repository:**
+1.  **Create & activate virtual environment:**
     ```bash
-    git clone https://github.com/your-username/T212toExcel.git
-    cd T212toExcel
+    cd path/to/your/project
+    python3 -m venv venv
+    source venv/bin/activate
     ```
 1.  **Install dependencies:**
     ```bash
